@@ -8,10 +8,17 @@ from __future__ import annotations
 from typing import List
 
 from patterns.clustering import Cluster
-from patterns.patterns_def import CorePattern
 
 
 SV_AMOUNT_THRESHOLD = 2000.0  # ms
+
+
+def is_hybrid_chart(primary: Cluster, secondary: Cluster | None) -> bool:
+    """
+    Hybrid extension point.
+    Keep this function as the single entry to hybrid categorisation rules.
+    """
+    return False
 
 
 def categorise_chart(keys: int, ordered_clusters: List[Cluster], sv_amount: float) -> str:
@@ -30,12 +37,7 @@ def categorise_chart(keys: int, ordered_clusters: List[Cluster], sv_amount: floa
     cluster_1 = important[0]
     cluster_2 = important[1] if len(important) > 1 else None
 
-    is_hybrid = False
-    if cluster_2 is not None:
-        if cluster_2.Pattern == CorePattern.Jacks and cluster_1.Pattern in (CorePattern.Stream, CorePattern.Chordstream):
-            is_hybrid = True
-        if cluster_2.Pattern in (CorePattern.Stream, CorePattern.Chordstream) and cluster_1.Pattern == CorePattern.Jacks:
-            is_hybrid = True
+    is_hybrid = is_hybrid_chart(cluster_1, cluster_2)
 
     is_tech = cluster_1.Mixed
     is_sv = sv_amount >= SV_AMOUNT_THRESHOLD

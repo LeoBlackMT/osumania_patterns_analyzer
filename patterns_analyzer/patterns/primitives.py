@@ -10,7 +10,6 @@ from enum import Enum
 from typing import List, Tuple
 
 from chart import Chart, NoteType
-from patterns.density import Density
 from calculator.difficulty import Difficulty
 
 
@@ -31,7 +30,6 @@ class RowInfo:
     Jacks: int
     Direction: Direction
     Roll: bool
-    Density: Density
     Variety: float
     Strains: List[float]
     RawNotes: List[int]
@@ -71,7 +69,7 @@ def detect_direction(previous_row: List[int], current_row: List[int]) -> Tuple[D
     return direction, is_roll
 
 
-def calculate_primitives(density_arr: List[Density], difficulty_info: Difficulty, chart: Chart) -> List[RowInfo]:
+def calculate_primitives(difficulty_info: Difficulty, chart: Chart) -> List[RowInfo]:
     first_note = chart.Notes[0].Time
     first_row = chart.Notes[0].Data
 
@@ -110,7 +108,6 @@ def calculate_primitives(density_arr: List[Density], difficulty_info: Difficulty
                 Jacks=jacks,
                 Direction=direction,
                 Roll=is_roll,
-                Density=density_arr[index],
                 Variety=difficulty_info.Variety[index],
                 Strains=difficulty_info.Strains[index].StrainV1Notes,
                 RawNotes=current_row,

@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from typing import List
 
 from calculator.difficulty import Difficulty
-from patterns.density import Density, process_chart
 from patterns.find_patterns import find
-from patterns.clustering import Cluster, calculate_clustered_patterns, find_percentile
+from patterns.clustering import Cluster, calculate_clustered_patterns
 from patterns.primitives import ln_percent, sv_time
 from patterns.categorise import categorise_chart
 
@@ -22,12 +21,6 @@ class PatternReport:
     Category: str
     LNPercent: float
     SVAmount: float
-
-    Density10: Density
-    Density25: Density
-    Density50: Density
-    Density75: Density
-    Density90: Density
 
     Duration: float
 
@@ -46,8 +39,7 @@ class PatternReport:
 
 
 def from_chart(difficulty_info: Difficulty, chart) -> PatternReport:
-    density = process_chart(chart)
-    patterns = find(density, difficulty_info, chart)
+    patterns = find(difficulty_info, chart)
 
     clusters = [c for c in calculate_clustered_patterns(patterns) if c.BPM > 25]
     clusters.sort(key=lambda x: x.Amount, reverse=True)
@@ -68,17 +60,11 @@ def from_chart(difficulty_info: Difficulty, chart) -> PatternReport:
     pruned_clusters.sort(key=lambda x: x.Importance, reverse=True)
 
     sv_amount = sv_time(chart)
-    sorted_densities = sorted(density)
 
     return PatternReport(
         Clusters=pruned_clusters,
         LNPercent=ln_percent(chart),
         SVAmount=sv_amount,
         Category=categorise_chart(chart.Keys, pruned_clusters, sv_amount),
-        Density10=find_percentile(0.1, sorted_densities),
-        Density25=find_percentile(0.25, sorted_densities),
-        Density50=find_percentile(0.5, sorted_densities),
-        Density75=find_percentile(0.75, sorted_densities),
-        Density90=find_percentile(0.9, sorted_densities),
         Duration=(chart.LastNote - chart.FirstNote),
     )

@@ -41,7 +41,7 @@ def main():
     report = from_chart(diff, chart)
 
     out_path = os.path.join(os.getcwd(), "output.txt")
-    write_output_txt(out_path, rate, report.Category, report.Clusters)
+    write_output_txt(out_path, rate, report.Category, report.Clusters, report.Duration)
 
     print(f"已输出：{out_path}")
     print(f"Keys={chart.Keys}, Clusters={len(report.Clusters)}, Category={report.Category}")

@@ -7,12 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-import math
 
-from calculator.difficulty import weighted_overall_difficulty
-from patterns.find_patterns import FoundPattern
-from patterns.density import Density
-from patterns.patterns_def import CorePattern
+from .find_patterns import FoundPattern
+from .patterns_def import CorePattern
 
 
 BPM_CLUSTER_THRESHOLD = 5.0  # ms/beat
@@ -24,15 +21,10 @@ class Cluster:
     SpecificTypes: List[Tuple[str, float]]
     BPM: int
     Mixed: bool
-    Rating: float
-
-    Density10: Density
-    Density25: Density
-    Density50: Density
-    Density75: Density
-    Density90: Density
-
     Amount: float  # ms
+
+    # Keep the field for backward compatibility; rating is no longer computed.
+    Rating: float = 0.0
 
     @property
     def Importance(self) -> float:
@@ -68,14 +60,6 @@ class _ClusterBuilder:
     def Value(self) -> int:
         assert self.BPM is not None
         return self.BPM
-
-
-def find_percentile(percentile: float, sorted_values: List[float]) -> float:
-    if len(sorted_values) == 0:
-        return 0.0
-    index = int(math.floor(percentile * float(len(sorted_values))))
-    index = max(0, min(index, len(sorted_values) - 1))
-    return sorted_values[index]
 
 
 def _pattern_amount(sorted_starts_ends: List[Tuple[float, float]]) -> float:
@@ -141,7 +125,6 @@ def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterB
     out: List[Cluster] = []
     for (pattern, mixed, bpm), data in groups.items():
         starts_ends = sorted([(m.Start, m.End) for (m, _) in data], key=lambda x: x[0])
-        densities = sorted([m.Density for (m, _) in data])
 
         data_count = float(len(data))
         # 统计 specific type 占比
@@ -151,26 +134,12 @@ def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterB
                 counter[m.SpecificType] = counter.get(m.SpecificType, 0) + 1
         specific_types = sorted([(k, v / data_count) for k, v in counter.items()], key=lambda x: x[1], reverse=True)
 
-        # Rating：把 data 里所有 Strains concat filter>0 然后 weighted_overall_difficulty
-        all_strains = []
-        for m, _ in data:
-            for x in m.Strains:
-                if x > 0.0:
-                    all_strains.append(x)
-        rating = weighted_overall_difficulty(all_strains)
-
         out.append(
             Cluster(
                 Pattern=pattern,
                 SpecificTypes=specific_types,
                 BPM=bpm,
                 Mixed=mixed,
-                Rating=rating,
-                Density10=find_percentile(0.1, densities),
-                Density25=find_percentile(0.25, densities),
-                Density50=find_percentile(0.5, densities),
-                Density75=find_percentile(0.75, densities),
-                Density90=find_percentile(0.9, densities),
                 Amount=_pattern_amount(starts_ends) if len(starts_ends) > 0 else 0.0,
             )
         )

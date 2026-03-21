@@ -16,7 +16,7 @@ def format_specific_types(specific_types: List[tuple[str, float]]) -> str:
     return ", ".join(parts)
 
 
-def write_output_txt(path: str, rate: float, category: str, clusters: List[Cluster]) -> None:
+def write_output_txt(path: str, rate: float, category: str, clusters: List[Cluster], duration_ms: float) -> None:
     lines: List[str] = []
     lines.append(f"Category: {category}")
     lines.append("")
@@ -25,7 +25,8 @@ def write_output_txt(path: str, rate: float, category: str, clusters: List[Clust
         lines.append("No clusters found.")
     else:
         for c in clusters:
-            header = f"{c.Format(rate)} | Rating={c.Rating:.4f} | Amount={c.Amount/1000.0:.2f}s"
+            amount_ratio = (c.Amount / duration_ms * 100.0) if duration_ms > 0 else 0.0
+            header = f"{c.Format(rate)} | Amount={amount_ratio:.2f}%"
             st = format_specific_types(c.SpecificTypes)
             if st:
                 header += f" | {st}"

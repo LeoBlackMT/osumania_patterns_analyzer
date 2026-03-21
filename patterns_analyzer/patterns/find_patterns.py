@@ -10,7 +10,6 @@ from typing import List, Optional
 
 from chart import Chart
 from calculator.difficulty import Difficulty
-from patterns.density import Density
 from patterns.primitives import RowInfo, calculate_primitives
 from patterns.patterns_def import (
     CorePattern,
@@ -33,7 +32,6 @@ class FoundPattern:
     End: float
     MsPerBeat: float
     Strains: List[float]
-    Density: float
 
 
 PATTERN_STABILITY_THRESHOLD = 5.0
@@ -79,7 +77,6 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     End=end,
                     MsPerBeat=mean_mspb,
                     Strains=remaining[0].Strains,
-                    Density=sum(x.Density for x in d) / len(d),
                 )
             )
 
@@ -109,7 +106,6 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     End=end,
                     MsPerBeat=mean_mspb,
                     Strains=remaining[0].Strains,
-                    Density=sum(x.Density for x in d) / len(d),
                 )
             )
 
@@ -141,7 +137,6 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     End=end,
                     MsPerBeat=mean_mspb,
                     Strains=remaining[0].Strains,
-                    Density=sum(x.Density for x in d) / len(d),
                 )
             )
 
@@ -150,8 +145,8 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
     return results
 
 
-def find(density: List[Density], difficulty_info: Difficulty, chart: Chart) -> List[FoundPattern]:
-    primitives = calculate_primitives(density, difficulty_info, chart)
+def find(difficulty_info: Difficulty, chart: Chart) -> List[FoundPattern]:
+    primitives = calculate_primitives(difficulty_info, chart)
 
     if chart.Keys == 4:
         keymode_patterns = SPECIFIC_4K()
