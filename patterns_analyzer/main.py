@@ -13,7 +13,6 @@ import os
 import sys
 
 from osu_parser import parse_osu_mania
-from calculator.difficulty import calculate as calc_difficulty
 from patterns.summary import from_chart
 from output_writer import write_output_txt
 
@@ -37,8 +36,7 @@ def main():
     # 目前测试只用 rate=1.0（Interlude 内部会支持变速；你后续接 Nonebot 时也可做参数）
     rate = 1.0
 
-    diff = calc_difficulty(rate, chart.Notes)
-    report = from_chart(diff, chart)
+    report = from_chart(chart)
 
     out_path = os.path.join(os.getcwd(), "output.txt")
     write_output_txt(out_path, rate, report.Category, report.Clusters, report.Duration)

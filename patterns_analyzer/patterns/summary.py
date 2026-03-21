@@ -8,9 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-from calculator.difficulty import Difficulty
 from patterns.find_patterns import find
 from patterns.clustering import Cluster, calculate_clustered_patterns
+from patterns.patterns_def import CorePattern
 from patterns.primitives import ln_percent, sv_time
 from patterns.categorise import categorise_chart
 
@@ -38,8 +38,8 @@ class PatternReport:
         return out
 
 
-def from_chart(difficulty_info: Difficulty, chart) -> PatternReport:
-    patterns = find(difficulty_info, chart)
+def from_chart(chart) -> PatternReport:
+    patterns = find(chart)
 
     clusters = [c for c in calculate_clustered_patterns(patterns) if c.BPM > 25]
     clusters.sort(key=lambda x: x.Amount, reverse=True)
@@ -52,11 +52,10 @@ def from_chart(difficulty_info: Difficulty, chart) -> PatternReport:
 
     filtered = [c for c in clusters if not can_be_pruned(c)]
 
-    # 每类最多 3 个，然后按 Importance 排序
-    by_stream = [c for c in filtered if c.Pattern.value == "Stream"][:3]
-    by_chord = [c for c in filtered if c.Pattern.value == "Chordstream"][:3]
-    by_jacks = [c for c in filtered if c.Pattern.value == "Jacks"][:3]
-    pruned_clusters = by_stream + by_chord + by_jacks
+    # 每类最多 3 个（包含新增分类），然后按 Importance 排序
+    pruned_clusters: List[Cluster] = []
+    for pattern in CorePattern:
+        pruned_clusters.extend([c for c in filtered if c.Pattern == pattern][:3])
     pruned_clusters.sort(key=lambda x: x.Importance, reverse=True)
 
     sv_amount = sv_time(chart)

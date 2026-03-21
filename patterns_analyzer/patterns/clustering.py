@@ -23,9 +23,6 @@ class Cluster:
     Mixed: bool
     Amount: float  # ms
 
-    # Keep the field for backward compatibility; rating is no longer computed.
-    Rating: float = 0.0
-
     @property
     def Importance(self) -> float:
         return self.Amount * self.Pattern.RatingMultiplier * float(self.BPM)

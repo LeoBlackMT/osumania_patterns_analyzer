@@ -10,7 +10,6 @@ from enum import Enum
 from typing import List, Tuple
 
 from chart import Chart, NoteType
-from calculator.difficulty import Difficulty
 
 
 class Direction(Enum):
@@ -30,8 +29,9 @@ class RowInfo:
     Jacks: int
     Direction: Direction
     Roll: bool
-    Variety: float
-    Strains: List[float]
+    LNHeads: List[int]
+    LNBodies: List[int]
+    LNTails: List[int]
     RawNotes: List[int]
 
 
@@ -69,7 +69,7 @@ def detect_direction(previous_row: List[int], current_row: List[int]) -> Tuple[D
     return direction, is_roll
 
 
-def calculate_primitives(difficulty_info: Difficulty, chart: Chart) -> List[RowInfo]:
+def calculate_primitives(chart: Chart) -> List[RowInfo]:
     first_note = chart.Notes[0].Time
     first_row = chart.Notes[0].Data
 
@@ -89,15 +89,31 @@ def calculate_primitives(difficulty_info: Difficulty, chart: Chart) -> List[RowI
         row = item.Data
         index += 1
 
-        current_row = [k for k in range(chart.Keys) if row[k] in (NoteType.NORMAL, NoteType.HOLDHEAD)]
-        if len(current_row) == 0:
+        current_row: List[int] = []
+        ln_heads: List[int] = []
+        ln_bodies: List[int] = []
+        ln_tails: List[int] = []
+        for k in range(chart.Keys):
+            n = row[k]
+            if n in (NoteType.NORMAL, NoteType.HOLDHEAD):
+                current_row.append(k)
+            if n == NoteType.HOLDHEAD:
+                ln_heads.append(k)
+            elif n == NoteType.HOLDBODY:
+                ln_bodies.append(k)
+            elif n == NoteType.HOLDTAIL:
+                ln_tails.append(k)
+
+        if len(current_row) == 0 and len(ln_heads) == 0 and len(ln_bodies) == 0 and len(ln_tails) == 0:
             continue
 
-        direction, is_roll = detect_direction(previous_row, current_row)
-        # Jacks = current_row.Length - (Array.except previous_row current_row).Length
-        # 即：当前行里有多少列也在上一行里（交集大小）
-        except_count = len([x for x in current_row if x not in previous_row])
-        jacks = len(current_row) - except_count
+        if len(current_row) > 0:
+            direction, is_roll = detect_direction(previous_row, current_row)
+            # Jacks：当前行与上一有效按键行的列交集大小。
+            jacks = len(set(current_row).intersection(previous_row))
+        else:
+            direction, is_roll = Direction.None_, False
+            jacks = 0
 
         out.append(
             RowInfo(
@@ -108,13 +124,15 @@ def calculate_primitives(difficulty_info: Difficulty, chart: Chart) -> List[RowI
                 Jacks=jacks,
                 Direction=direction,
                 Roll=is_roll,
-                Variety=difficulty_info.Variety[index],
-                Strains=difficulty_info.Strains[index].StrainV1Notes,
+                LNHeads=ln_heads,
+                LNBodies=ln_bodies,
+                LNTails=ln_tails,
                 RawNotes=current_row,
             )
         )
 
-        previous_row = current_row
+        if len(current_row) > 0:
+            previous_row = current_row
         previous_time = t
 
     return out

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Tuple
 
 from patterns.primitives import RowInfo, Direction
 
@@ -25,18 +25,10 @@ class CorePattern(Enum):
     Stream = "Stream"
     Chordstream = "Chordstream"
     Jacks = "Jacks"
-
-    @property
-    def DensityToBPM(self) -> float:
-        # F#：beat/minute 的单位在 Python 不保留，直接用数值
-        if self == CorePattern.Stream:
-            return 52.5
-        if self == CorePattern.Chordstream:
-            return 35.0
-        if self == CorePattern.Jacks:
-            return 17.5
-        raise ValueError
-
+    Coordination = "Coordination"
+    Density = "Density"
+    Wildcard = "Wildcard"
+    
     @property
     def RatingMultiplier(self) -> float:
         if self == CorePattern.Stream:
@@ -45,18 +37,13 @@ class CorePattern(Enum):
             return 0.5
         if self == CorePattern.Jacks:
             return 1.0
+        if self == CorePattern.Coordination:
+            return 1.0 / 3.0
+        if self == CorePattern.Density:
+            return 0.7
+        if self == CorePattern.Wildcard:
+            return 1.0
         raise ValueError
-
-    @property
-    def AccuracyBreakpoints(self) -> Tuple[float, float, float]:
-        if self == CorePattern.Stream:
-            return (0.97, 0.935, 0.90)
-        if self == CorePattern.Chordstream:
-            return (0.98, 0.95, 0.91)
-        if self == CorePattern.Jacks:
-            return (0.99, 0.96, 0.93)
-        raise ValueError
-
 
 PatternRecogniser = Callable[[List[RowInfo]], int]
 
@@ -101,6 +88,33 @@ def CORE_CHORDSTREAM(xs: List[RowInfo]) -> int:
     if a.Notes > 1 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0 and d.Jacks == 0:
         if (b.Notes > 1) or (c.Notes > 1) or (d.Notes > 1):
             return 4
+    return 0
+
+
+def CORE_COORDINATION(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    a = xs[0]
+    if len(a.LNHeads) > 0 or len(a.LNBodies) > 0 or len(a.LNTails) > 0:
+        return 1
+    return 0
+
+
+def CORE_DENSITY(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    a = xs[0]
+    if a.Notes >= 2 and a.Jacks == 0:
+        return 1
+    return 0
+
+
+def CORE_WILDCARD(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    a = xs[0]
+    if a.Jacks > 0 or a.MsPerBeat < 125.0:
+        return 1
     return 0
 
 
@@ -369,6 +383,150 @@ def CHORDSTREAM_OTHER_CHORD_ROLL(xs: List[RowInfo]) -> int:
 
 
 # -----------------------------
+# module Coordination
+# -----------------------------
+
+def COORDINATION_COLUMN_LOCK(xs: List[RowInfo]) -> int:
+    if len(xs) < 2:
+        return 0
+    a, b = xs[0], xs[1]
+    if len(a.LNBodies) == 0:
+        return 0
+    lock_a = any(k in a.LNBodies for k in a.RawNotes)
+    lock_b = any(k in b.LNBodies for k in b.RawNotes)
+    return 2 if (lock_a or lock_b) else 0
+
+
+def COORDINATION_RELEASE(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    return 1 if len(xs[0].LNTails) > 0 else 0
+
+
+def COORDINATION_SHIELD(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    a = xs[0]
+    if len(a.LNBodies) == 0 or a.Notes == 0:
+        return 0
+    overlap = any(k in a.LNBodies for k in a.RawNotes)
+    return 1 if not overlap else 0
+
+
+# -----------------------------
+# module Density_4K
+# -----------------------------
+
+def DENSITY_4K_JUMPSTREAM(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    if a.Notes == 2 and b.Notes == 2 and c.Notes == 2 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
+        return 3
+    return 0
+
+
+def DENSITY_4K_HANDSTREAM(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    if a.Notes >= 3 and b.Notes >= 3 and c.Notes >= 3 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
+        return 3
+    return 0
+
+def DENSITY_4K_INVERSE(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    lr = (Direction.Left, Direction.Right, Direction.Left)
+    rl = (Direction.Right, Direction.Left, Direction.Right)
+    seq = (a.Direction, b.Direction, c.Direction)
+    return 3 if seq in (lr, rl) else 0
+
+
+
+# -----------------------------
+# module Density_7K
+# -----------------------------
+
+def DENSITY_7K_DOUBLE_STREAMS(xs: List[RowInfo]) -> int:
+    if len(xs) < 2:
+        return 0
+    a, b = xs[0], xs[1]
+    if a.Notes == 2 and b.Notes == 2 and b.Jacks == 0 and (not b.Roll):
+        return 2
+    return 0
+
+def DENSITY_7K_DENSE_CHORDSTREAM(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    if a.Notes == 2 and b.Notes == 2 and c.Notes == 2 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
+        return 3
+    return 0
+
+def DENSITY_7K_LIGHT_CHORDSTREAM(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    if a.Notes >= 3 and b.Notes >= 3 and c.Notes >= 3 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
+        return 3
+    return 0
+
+def DENSITY_7K_INVERSE(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    a, b, c = xs[0], xs[1], xs[2]
+    lr = (Direction.Left, Direction.Right, Direction.Left)
+    rl = (Direction.Right, Direction.Left, Direction.Right)
+    seq = (a.Direction, b.Direction, c.Direction)
+    return 3 if seq in (lr, rl) else 0
+
+
+# -----------------------------
+# module Density_Other
+# -----------------------------
+
+def DENSITY_Other_DOUBLE_STREAMS(xs: List[RowInfo]) -> int:
+    return DENSITY_7K_DOUBLE_STREAMS(xs)
+
+def DENSITY_Other_DENSE_CHORDSTREAM(xs: List[RowInfo]) -> int:
+    return DENSITY_7K_DENSE_CHORDSTREAM(xs)
+
+def DENSITY_Other_LIGHT_CHORDSTREAM(xs: List[RowInfo]) -> int:
+    return DENSITY_7K_LIGHT_CHORDSTREAM(xs)
+
+def DENSITY_Other_INVERSE(xs: List[RowInfo]) -> int:
+    return DENSITY_7K_INVERSE(xs)
+
+
+# -----------------------------
+# module Wildcard
+# -----------------------------
+
+def WILDCARD_JACK(xs: List[RowInfo]) -> int:
+    if len(xs) < 1:
+        return 0
+    return 1 if xs[0].Jacks > 0 else 0
+
+
+def WILDCARD_SPEED(xs: List[RowInfo]) -> int:
+    if len(xs) < 2:
+        return 0
+    a, b = xs[0], xs[1]
+    if a.MsPerBeat <= 120.0 and b.MsPerBeat <= 120.0:
+        return 2
+    return 0
+
+
+def WILDCARD_TIMING_HELL(xs: List[RowInfo]) -> int:
+    if len(xs) < 3:
+        return 0
+    m = [xs[0].MsPerBeat, xs[1].MsPerBeat, xs[2].MsPerBeat]
+    return 3 if (max(m) - min(m)) > 35.0 else 0
+
+
+# -----------------------------
 # SpecificPatterns record（对应 F# type SpecificPatterns with 3 static members）
 # -----------------------------
 
@@ -377,6 +535,9 @@ class SpecificPatterns:
     Stream: List[Tuple[str, PatternRecogniser]]
     Chordstream: List[Tuple[str, PatternRecogniser]]
     Jack: List[Tuple[str, PatternRecogniser]]
+    Coordination: List[Tuple[str, PatternRecogniser]]
+    Density: List[Tuple[str, PatternRecogniser]]
+    Wildcard: List[Tuple[str, PatternRecogniser]]
 
 
 def SPECIFIC_4K() -> SpecificPatterns:
@@ -402,6 +563,21 @@ def SPECIFIC_4K() -> SpecificPatterns:
             ("Chordjacks", JACKS_CHORDJACKS),
             ("Minijacks", JACKS_MINIJACKS),
         ],
+        Coordination=[
+            ("Column Lock", COORDINATION_COLUMN_LOCK),
+            ("Release", COORDINATION_RELEASE),
+            ("Shield", COORDINATION_SHIELD),
+        ],
+        Density=[
+            ("JS Density", DENSITY_4K_JUMPSTREAM),
+            ("HS Density", DENSITY_4K_HANDSTREAM),
+            ("Inverse", DENSITY_4K_INVERSE),
+        ],
+        Wildcard=[
+            ("Jacky WC", WILDCARD_JACK),
+            ("Speedy WC", WILDCARD_SPEED),
+            ("TimingHell", WILDCARD_TIMING_HELL),
+        ],
     )
 
 
@@ -420,6 +596,22 @@ def SPECIFIC_7K() -> SpecificPatterns:
             ("Chordjacks", JACKS_CHORDJACKS),
             ("Minijacks", JACKS_MINIJACKS),
         ],
+        Coordination=[
+            ("Column Lock", COORDINATION_COLUMN_LOCK),
+            ("Release", COORDINATION_RELEASE),
+            ("Shield", COORDINATION_SHIELD),
+        ],
+        Density=[
+            ("DS Density", DENSITY_7K_DOUBLE_STREAMS),
+            ("DCS Density", DENSITY_7K_DENSE_CHORDSTREAM),
+            ("LCS Density", DENSITY_7K_LIGHT_CHORDSTREAM),
+            ("Inverse", DENSITY_7K_INVERSE),
+        ],
+        Wildcard=[
+            ("Jacky WC", WILDCARD_JACK),
+            ("Speedy WC", WILDCARD_SPEED),
+            ("TimingHell", WILDCARD_TIMING_HELL),
+        ],
     )
 
 
@@ -436,5 +628,21 @@ def SPECIFIC_OTHER() -> SpecificPatterns:
             ("Longjacks", JACKS_LONGJACKS),
             ("Chordjacks", JACKS_CHORDJACKS),
             ("Minijacks", JACKS_MINIJACKS),
+        ],
+        Coordination=[
+            ("Column Lock", COORDINATION_COLUMN_LOCK),
+            ("Release", COORDINATION_RELEASE),
+            ("Shield", COORDINATION_SHIELD),
+        ],
+        Density=[
+            ("DS Density", DENSITY_Other_DOUBLE_STREAMS),
+            ("DCS Density", DENSITY_Other_DENSE_CHORDSTREAM),
+            ("LCS Density", DENSITY_Other_LIGHT_CHORDSTREAM),
+            ("Inverse", DENSITY_Other_INVERSE),
+        ],
+        Wildcard=[
+            ("Jacky WC", WILDCARD_JACK),
+            ("Speedy WC", WILDCARD_SPEED),
+            ("TimingHell", WILDCARD_TIMING_HELL),
         ],
     )
