@@ -32,6 +32,7 @@ jobs:
 
       - name: Build
         run: |
+          cd patterns_analyzer
           pyinstaller --clean --noconfirm --onefile --name patterns_analyzer main.py
 
       - name: Upload artifacts
@@ -39,5 +40,5 @@ jobs:
         with:
           name: percy-skin-editor-exe
           path: |
-            dist/patterns_analyzer.exe
+            patterns_analyzer/dist/patterns_analyzer.exe
           if-no-files-found: error
