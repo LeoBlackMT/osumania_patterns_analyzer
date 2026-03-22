@@ -25,14 +25,49 @@ class RowInfo:
     Index: int
     Time: float
     MsPerBeat: float
+    BeatLength: float
     Notes: int
     Jacks: int
     Direction: Direction
     Roll: bool
+    Keys: int
+    LeftHandKeys: int
     LNHeads: List[int]
     LNBodies: List[int]
     LNTails: List[int]
+    NormalNotes: List[int]
     RawNotes: List[int]
+
+
+def _keys_on_left_hand(keymode: int) -> int:
+    if keymode == 3:
+        return 2
+    if keymode == 4:
+        return 2
+    if keymode == 5:
+        return 3
+    if keymode == 6:
+        return 3
+    if keymode == 7:
+        return 4
+    if keymode == 8:
+        return 4
+    if keymode == 9:
+        return 5
+    if keymode == 10:
+        return 5
+    return max(1, keymode // 2)
+
+
+def _beat_length_at(chart: Chart, time: float) -> float:
+    if len(chart.BPM) == 0:
+        return 500.0
+    current = chart.BPM[0].Data.MsPerBeat
+    for item in chart.BPM:
+        if item.Time > time:
+            break
+        current = item.Data.MsPerBeat
+    return current
 
 
 def detect_direction(previous_row: List[int], current_row: List[int]) -> Tuple[Direction, bool]:
@@ -80,6 +115,7 @@ def calculate_primitives(chart: Chart) -> List[RowInfo]:
 
     previous_time = first_note
     index = 0
+    left_hand_keys = _keys_on_left_hand(chart.Keys)
 
     out: List[RowInfo] = []
 
@@ -90,6 +126,7 @@ def calculate_primitives(chart: Chart) -> List[RowInfo]:
         index += 1
 
         current_row: List[int] = []
+        normal_notes: List[int] = []
         ln_heads: List[int] = []
         ln_bodies: List[int] = []
         ln_tails: List[int] = []
@@ -97,6 +134,8 @@ def calculate_primitives(chart: Chart) -> List[RowInfo]:
             n = row[k]
             if n in (NoteType.NORMAL, NoteType.HOLDHEAD):
                 current_row.append(k)
+            if n == NoteType.NORMAL:
+                normal_notes.append(k)
             if n == NoteType.HOLDHEAD:
                 ln_heads.append(k)
             elif n == NoteType.HOLDBODY:
@@ -120,13 +159,17 @@ def calculate_primitives(chart: Chart) -> List[RowInfo]:
                 Index=index,
                 Time=(t - first_note),
                 MsPerBeat=(t - previous_time) * 4.0,   # *4 => 1/4 间隔
+                BeatLength=_beat_length_at(chart, t),
                 Notes=len(current_row),
                 Jacks=jacks,
                 Direction=direction,
                 Roll=is_roll,
+                Keys=chart.Keys,
+                LeftHandKeys=left_hand_keys,
                 LNHeads=ln_heads,
                 LNBodies=ln_bodies,
                 LNTails=ln_tails,
+                NormalNotes=normal_notes,
                 RawNotes=current_row,
             )
         )

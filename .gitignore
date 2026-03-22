@@ -207,3 +207,5 @@ marimo/_lsp/
 __marimo__/
 patterns_analyzer/output.txt
 patterns_analyzer.exe
+/patterns_analyzer/cache
+/patterns_analyzer/maps

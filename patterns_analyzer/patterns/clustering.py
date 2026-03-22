@@ -8,27 +8,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+from config import BPM_CLUSTER_THRESHOLD, CLUSTER_SPECIFIC_NAME_MIN_RATIO
 from .find_patterns import FoundPattern
-from .patterns_def import CorePattern
-
-
-BPM_CLUSTER_THRESHOLD = 5.0  # ms/beat
+from .patterns_def import CorePattern, resolve_rating_multiplier
 
 
 @dataclass
 class Cluster:
     Pattern: CorePattern
     SpecificTypes: List[Tuple[str, float]]
+    RatingMultiplier: float
     BPM: int
     Mixed: bool
     Amount: float  # ms
 
     @property
     def Importance(self) -> float:
-        return self.Amount * self.Pattern.RatingMultiplier * float(self.BPM)
+        return self.Amount * self.RatingMultiplier * float(self.BPM)
 
     def Format(self, rate: float) -> str:
-        if len(self.SpecificTypes) > 0 and self.SpecificTypes[0][1] > 0.4:
+        if len(self.SpecificTypes) > 0 and self.SpecificTypes[0][1] >= CLUSTER_SPECIFIC_NAME_MIN_RATIO:
             name = self.SpecificTypes[0][0]
         else:
             name = self.Pattern.value
@@ -50,7 +49,10 @@ class _ClusterBuilder:
 
     def Calculate(self) -> None:
         average = self.SumMs / float(self.Count)
-        bpm = int(round(60000.0 / average))
+        if average <= 0.0:
+            bpm = 0
+        else:
+            bpm = int(round(60000.0 / average))
         self.BPM = bpm
 
     @property
@@ -130,11 +132,13 @@ def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterB
             if m.SpecificType is not None:
                 counter[m.SpecificType] = counter.get(m.SpecificType, 0) + 1
         specific_types = sorted([(k, v / data_count) for k, v in counter.items()], key=lambda x: x[1], reverse=True)
+        dominant_specific = specific_types[0][0] if len(specific_types) > 0 else None
 
         out.append(
             Cluster(
                 Pattern=pattern,
                 SpecificTypes=specific_types,
+                RatingMultiplier=resolve_rating_multiplier(pattern, dominant_specific),
                 BPM=bpm,
                 Mixed=mixed,
                 Amount=_pattern_amount(starts_ends) if len(starts_ends) > 0 else 0.0,

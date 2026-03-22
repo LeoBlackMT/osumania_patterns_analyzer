@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
+from config import PATTERN_STABILITY_THRESHOLD
 from chart import Chart
 from patterns.primitives import RowInfo, calculate_primitives
 from patterns.patterns_def import (
@@ -34,10 +35,6 @@ class FoundPattern:
     End: float
     MsPerBeat: float
 
-
-PATTERN_STABILITY_THRESHOLD = 5.0
-
-
 def _pick_specific(specific_list, remaining: List[RowInfo]):
     # F#：tryPick 找到第一个返回非 0 的 recogniser
     for name, p in specific_list:
@@ -45,6 +42,14 @@ def _pick_specific(specific_list, remaining: List[RowInfo]):
         if n != 0:
             return n, name
     return None
+
+
+def _resolved_mspb(pattern: CorePattern, specific_type: Optional[str], mean_mspb: float) -> float:
+    if pattern == CorePattern.Density and specific_type == "Inverse":
+        return 0.0
+    if pattern == CorePattern.Wildcard and specific_type == "TimingHell":
+        return 0.0
+    return mean_mspb
 
 
 def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: List[RowInfo]) -> List[FoundPattern]:
@@ -76,7 +81,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Stream, specific_type, mean_mspb),
                 )
             )
 
@@ -104,7 +109,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Chordstream, specific_type, mean_mspb),
                 )
             )
 
@@ -134,7 +139,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Jacks, specific_type, mean_mspb),
                 )
             )
 
@@ -162,7 +167,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Coordination, specific_type, mean_mspb),
                 )
             )
 
@@ -190,7 +195,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Density, specific_type, mean_mspb),
                 )
             )
 
@@ -218,7 +223,7 @@ def matches(specific_patterns: SpecificPatterns, last_note: float, primitives: L
                     Mixed=mixed,
                     Start=start,
                     End=end,
-                    MsPerBeat=mean_mspb,
+                    MsPerBeat=_resolved_mspb(CorePattern.Wildcard, specific_type, mean_mspb),
                 )
             )
 

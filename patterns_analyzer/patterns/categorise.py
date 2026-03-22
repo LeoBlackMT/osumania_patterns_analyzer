@@ -7,10 +7,8 @@ from __future__ import annotations
 
 from typing import List
 
+from config import CATEGORY_JS_HS_SECONDARY_RATIO, IMPORTANT_CLUSTER_RATIO, SV_AMOUNT_THRESHOLD
 from patterns.clustering import Cluster
-
-
-SV_AMOUNT_THRESHOLD = 2000.0  # ms
 
 
 def is_hybrid_chart(primary: Cluster, secondary: Cluster | None) -> bool:
@@ -29,7 +27,7 @@ def categorise_chart(keys: int, ordered_clusters: List[Cluster], sv_amount: floa
     first_imp = ordered_clusters[0].Importance
     important = []
     for c in ordered_clusters:
-        if c.Importance / first_imp > 0.5:
+        if c.Importance / first_imp > IMPORTANT_CLUSTER_RATIO:
             important.append(c)
         else:
             break
@@ -42,12 +40,12 @@ def categorise_chart(keys: int, ordered_clusters: List[Cluster], sv_amount: floa
     is_tech = cluster_1.Mixed
     is_sv = sv_amount >= SV_AMOUNT_THRESHOLD
 
-    if len(cluster_1.SpecificTypes) > 0 and cluster_1.SpecificTypes[0][1] > 0.4:
+    if len(cluster_1.SpecificTypes) > 0 and cluster_1.SpecificTypes[0][1] > 0:
         name = cluster_1.SpecificTypes[0][0]
     elif len(cluster_1.SpecificTypes) >= 2 and cluster_1.SpecificTypes[0][0] == "Jumpstream" and cluster_1.SpecificTypes[1][0] == "Handstream":
         a1 = cluster_1.SpecificTypes[0][1]
         a2 = cluster_1.SpecificTypes[1][1]
-        name = "Jumpstream/Handstream" if (a2 / a1) > 0.4 else cluster_1.Pattern.value
+        name = "Jumpstream/Handstream" if (a2 / a1) > CATEGORY_JS_HS_SECONDARY_RATIO else cluster_1.Pattern.value
     else:
         name = cluster_1.Pattern.value
 

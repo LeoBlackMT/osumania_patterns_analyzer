@@ -14,7 +14,29 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, List, Tuple
 
-from patterns.primitives import RowInfo, Direction
+from config import (
+    CORE_RATING_MULTIPLIER,
+    GRACE_MAX_BEAT_RATIO,
+    GRACE_MIN_BEAT_RATIO,
+    INVERSE_GAP_TOLERANCE_MS,
+    INVERSE_MIN_FILLED_LANES,
+    JACKY_CONTEXT_WINDOW,
+    JACKY_FALLBACK_MAX_MSPB,
+    JACKY_MIN_BPM,
+    RELEASE_FULL_MATCH_ROWS,
+    RELEASE_MIN_TAIL_ROWS,
+    RELEASE_ROLL_POINTS,
+    RELEASE_SCAN_ROWS,
+    SHIELD_MAX_BEAT_RATIO,
+    SUBTYPE_RATING_MULTIPLIER,
+    TIMINGHELL_CONTEXT_WINDOW,
+    TIMINGHELL_JITTER_THRESHOLD_MS,
+    TIMINGHELL_MIN_ROWS,
+    TIMINGHELL_MIN_TAIL_ROWS,
+    TIMINGHELL_REQUIRE_GRACE,
+    TIMINGHELL_TAIL_DELTA_BEAT_RATIO,
+)
+from patterns.primitives import RowInfo, Direction, detect_direction
 
 
 # -----------------------------
@@ -31,21 +53,121 @@ class CorePattern(Enum):
     
     @property
     def RatingMultiplier(self) -> float:
-        if self == CorePattern.Stream:
-            return 1.0 / 3.0
-        if self == CorePattern.Chordstream:
-            return 0.5
-        if self == CorePattern.Jacks:
-            return 1.0
-        if self == CorePattern.Coordination:
-            return 1.0 / 3.0
-        if self == CorePattern.Density:
-            return 0.7
-        if self == CorePattern.Wildcard:
-            return 1.0
-        raise ValueError
+        return CORE_RATING_MULTIPLIER.get(self.value, 1.0)
+
+
+def resolve_rating_multiplier(pattern: CorePattern, specific_type: str | None) -> float:
+    if specific_type is None:
+        return pattern.RatingMultiplier
+    return SUBTYPE_RATING_MULTIPLIER.get(specific_type, pattern.RatingMultiplier)
 
 PatternRecogniser = Callable[[List[RowInfo]], int]
+
+
+def _as_head_point_row(row: RowInfo, previous_head_cols: List[int]) -> RowInfo:
+    head_cols = row.LNHeads
+    jacks = len(set(head_cols).intersection(previous_head_cols)) if len(head_cols) > 0 else 0
+    direction = Direction.None_
+    roll = False
+    if len(previous_head_cols) > 0 and len(head_cols) > 0:
+        direction, roll = detect_direction(previous_head_cols, head_cols)
+    return RowInfo(
+        Index=row.Index,
+        Time=row.Time,
+        MsPerBeat=row.MsPerBeat,
+        BeatLength=row.BeatLength,
+        Notes=len(head_cols),
+        Jacks=jacks,
+        Direction=direction,
+        Roll=roll,
+        Keys=row.Keys,
+        LeftHandKeys=row.LeftHandKeys,
+        LNHeads=row.LNHeads,
+        LNBodies=row.LNBodies,
+        LNTails=row.LNTails,
+        NormalNotes=[],
+        RawNotes=head_cols,
+    )
+
+
+def _head_rows(xs: List[RowInfo], n: int) -> List[RowInfo]:
+    rows: List[RowInfo] = []
+    prev: List[int] = []
+    for row in xs[:n]:
+        hr = _as_head_point_row(row, prev)
+        rows.append(hr)
+        if len(hr.RawNotes) > 0:
+            prev = hr.RawNotes
+    return rows
+
+
+def _is_same_hand_adjacent(col_a: int, col_b: int, split: int) -> bool:
+    if abs(col_a - col_b) != 1:
+        return False
+    left_a = col_a < split
+    left_b = col_b < split
+    return left_a == left_b
+
+
+def _jack_bpm(delta_ms: float) -> float:
+    if delta_ms <= 0.0:
+        return 230.0
+    return min(15000.0 / delta_ms, 230.0)
+
+
+def _is_ln_head_context(xs: List[RowInfo]) -> bool:
+    return len(xs) > 0 and len(xs[0].LNHeads) > 0
+
+
+def _has_ln_context(xs: List[RowInfo], window: int) -> bool:
+    for row in xs[:window]:
+        if len(row.LNHeads) > 0 or len(row.LNBodies) > 0 or len(row.LNTails) > 0:
+            return True
+    return False
+
+
+def _is_grace_like(head_rows: List[RowInfo]) -> bool:
+    events: List[Tuple[float, int, float]] = []
+    for row in head_rows:
+        for col in row.RawNotes:
+            events.append((row.Time, col, row.BeatLength))
+    events.sort(key=lambda x: x[0])
+    if len(events) < 2:
+        return False
+    cols = {c for _, c, _ in events}
+    if len(cols) < 2:
+        return False
+
+    for i in range(len(events) - 1):
+        t0, _, beat = events[i]
+        t1, _, _ = events[i + 1]
+        delta = t1 - t0
+        if delta <= 0:
+            return False
+        low = beat * GRACE_MIN_BEAT_RATIO
+        high = beat * GRACE_MAX_BEAT_RATIO
+        if not (low <= delta <= high):
+            return False
+    return True
+
+
+def _inverse_ready(xs: List[RowInfo]) -> bool:
+    if len(xs) < 5:
+        return False
+    win = xs[:5]
+    if any(len(r.NormalNotes) > 0 for r in win):
+        return False
+    if max((len(r.LNBodies) for r in win), default=0) < INVERSE_MIN_FILLED_LANES:
+        return False
+
+    gaps: List[float] = []
+    for i in range(len(win) - 1):
+        if len(win[i].LNTails) > 0 and len(win[i + 1].LNHeads) > 0:
+            gaps.append(win[i + 1].Time - win[i].Time)
+
+    if len(gaps) < 2:
+        return False
+    return (max(gaps) - min(gaps)) <= INVERSE_GAP_TOLERANCE_MS
 
 
 # -----------------------------
@@ -103,8 +225,7 @@ def CORE_COORDINATION(xs: List[RowInfo]) -> int:
 def CORE_DENSITY(xs: List[RowInfo]) -> int:
     if len(xs) < 1:
         return 0
-    a = xs[0]
-    if a.Notes >= 2 and a.Jacks == 0:
+    if _is_ln_head_context(xs):
         return 1
     return 0
 
@@ -112,8 +233,7 @@ def CORE_DENSITY(xs: List[RowInfo]) -> int:
 def CORE_WILDCARD(xs: List[RowInfo]) -> int:
     if len(xs) < 1:
         return 0
-    a = xs[0]
-    if a.Jacks > 0 or a.MsPerBeat < 125.0:
+    if _is_ln_head_context(xs):
         return 1
     return 0
 
@@ -387,30 +507,105 @@ def CHORDSTREAM_OTHER_CHORD_ROLL(xs: List[RowInfo]) -> int:
 # -----------------------------
 
 def COORDINATION_COLUMN_LOCK(xs: List[RowInfo]) -> int:
-    if len(xs) < 2:
+    if len(xs) < 3:
         return 0
-    a, b = xs[0], xs[1]
-    if len(a.LNBodies) == 0:
+    split = xs[0].LeftHandKeys
+
+    ln_col = xs[0].LNHeads[0] if len(xs[0].LNHeads) > 0 else None
+    if ln_col is None:
         return 0
-    lock_a = any(k in a.LNBodies for k in a.RawNotes)
-    lock_b = any(k in b.LNBodies for k in b.RawNotes)
-    return 2 if (lock_a or lock_b) else 0
+
+    adj_cols = [
+        c for c in (ln_col - 1, ln_col + 1)
+        if 0 <= c < xs[0].Keys and _is_same_hand_adjacent(ln_col, c, split)
+    ]
+    if len(adj_cols) == 0:
+        return 0
+
+    for adj in adj_cols:
+        hits: List[float] = []
+        for row in xs[:8]:
+            # 持续按住 LN（面身）期间看相邻列普通音。
+            if ln_col in row.LNBodies and adj in row.NormalNotes:
+                hits.append(row.Time)
+        if len(hits) < 3:
+            continue
+
+        bpms: List[float] = []
+        for i in range(len(hits) - 1):
+            bpms.append(_jack_bpm(hits[i + 1] - hits[i]))
+        if len(bpms) > 0 and max(bpms) >= JACKY_MIN_BPM:
+            return 3
+
+    return 0
 
 
 def COORDINATION_RELEASE(xs: List[RowInfo]) -> int:
-    if len(xs) < 1:
+    if len(xs) < RELEASE_MIN_TAIL_ROWS:
         return 0
-    return 1 if len(xs[0].LNTails) > 0 else 0
+
+    picked_rows = [r for r in xs[:RELEASE_SCAN_ROWS] if len(r.LNTails) == 1]
+    if len(picked_rows) < RELEASE_MIN_TAIL_ROWS:
+        return 0
+
+    use_rows = min(RELEASE_FULL_MATCH_ROWS, len(picked_rows))
+    tails = [r.LNTails[0] for r in picked_rows[:use_rows]]
+    prev = [tails[0]]
+    rows = []
+    for i in range(use_rows):
+        row = picked_rows[i]
+        cur = [tails[i]]
+        direction, roll = detect_direction(prev, cur)
+        rows.append(
+            RowInfo(
+                Index=row.Index,
+                Time=row.Time,
+                MsPerBeat=row.MsPerBeat,
+                BeatLength=row.BeatLength,
+                Notes=1,
+                Jacks=1 if cur[0] in prev else 0,
+                Direction=direction,
+                Roll=roll,
+                Keys=row.Keys,
+                LeftHandKeys=row.LeftHandKeys,
+                LNHeads=row.LNHeads,
+                LNBodies=row.LNBodies,
+                LNTails=row.LNTails,
+                NormalNotes=[],
+                RawNotes=cur,
+            )
+        )
+        prev = cur
+
+    if len(rows) < RELEASE_ROLL_POINTS:
+        return 0
+
+    # 允许 3 点尾部序列命中；达到完整点数时仍返回更长长度。
+    if STREAM_4K_ROLL(rows[:RELEASE_ROLL_POINTS]) != 0:
+        return 5 if use_rows >= RELEASE_FULL_MATCH_ROWS else 4
+    return 0
 
 
 def COORDINATION_SHIELD(xs: List[RowInfo]) -> int:
-    if len(xs) < 1:
+    if len(xs) < 2:
         return 0
-    a = xs[0]
-    if len(a.LNBodies) == 0 or a.Notes == 0:
+    a, b = xs[0], xs[1]
+    dt = b.Time - a.Time
+    beat_limit = b.BeatLength * SHIELD_MAX_BEAT_RATIO
+    if dt < 0 or dt > beat_limit:
         return 0
-    overlap = any(k in a.LNBodies for k in a.RawNotes)
-    return 1 if not overlap else 0
+
+    # 普通音 -> LN 头
+    for col in a.NormalNotes:
+        if col in b.LNHeads:
+            return 2
+
+    # LN 尾 -> 普通音
+    for col in a.LNTails:
+        if col in b.NormalNotes:
+            return 2
+
+    return 0
 
 
 # -----------------------------
@@ -418,30 +613,18 @@ def COORDINATION_SHIELD(xs: List[RowInfo]) -> int:
 # -----------------------------
 
 def DENSITY_4K_JUMPSTREAM(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
+    if len(xs) < 4 or not _is_ln_head_context(xs):
         return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    if a.Notes == 2 and b.Notes == 2 and c.Notes == 2 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
-        return 3
-    return 0
+    return 4 if CHORDSTREAM_4K_JUMPSTREAM(_head_rows(xs, 4)) != 0 else 0
 
 
 def DENSITY_4K_HANDSTREAM(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
+    if len(xs) < 4 or not _is_ln_head_context(xs):
         return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    if a.Notes >= 3 and b.Notes >= 3 and c.Notes >= 3 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
-        return 3
-    return 0
+    return 4 if CHORDSTREAM_4K_HANDSTREAM(_head_rows(xs, 4)) != 0 else 0
 
 def DENSITY_4K_INVERSE(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
-        return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    lr = (Direction.Left, Direction.Right, Direction.Left)
-    rl = (Direction.Right, Direction.Left, Direction.Right)
-    seq = (a.Direction, b.Direction, c.Direction)
-    return 3 if seq in (lr, rl) else 0
+    return 5 if _inverse_ready(xs) else 0
 
 
 
@@ -450,37 +633,22 @@ def DENSITY_4K_INVERSE(xs: List[RowInfo]) -> int:
 # -----------------------------
 
 def DENSITY_7K_DOUBLE_STREAMS(xs: List[RowInfo]) -> int:
-    if len(xs) < 2:
+    if len(xs) < 2 or not _is_ln_head_context(xs):
         return 0
-    a, b = xs[0], xs[1]
-    if a.Notes == 2 and b.Notes == 2 and b.Jacks == 0 and (not b.Roll):
-        return 2
-    return 0
+    return 2 if CHORDSTREAM_7K_DOUBLE_STREAMS(_head_rows(xs, 2)) != 0 else 0
 
 def DENSITY_7K_DENSE_CHORDSTREAM(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
+    if len(xs) < 2 or not _is_ln_head_context(xs):
         return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    if a.Notes == 2 and b.Notes == 2 and c.Notes == 2 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
-        return 3
-    return 0
+    return 2 if CHORDSTREAM_7K_DENSE_CHORDSTREAM(_head_rows(xs, 2)) != 0 else 0
 
 def DENSITY_7K_LIGHT_CHORDSTREAM(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
+    if len(xs) < 2 or not _is_ln_head_context(xs):
         return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    if a.Notes >= 3 and b.Notes >= 3 and c.Notes >= 3 and a.Jacks == 0 and b.Jacks == 0 and c.Jacks == 0:
-        return 3
-    return 0
+    return 2 if CHORDSTREAM_7K_LIGHT_CHORDSTREAM(_head_rows(xs, 2)) != 0 else 0
 
 def DENSITY_7K_INVERSE(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
-        return 0
-    a, b, c = xs[0], xs[1], xs[2]
-    lr = (Direction.Left, Direction.Right, Direction.Left)
-    rl = (Direction.Right, Direction.Left, Direction.Right)
-    seq = (a.Direction, b.Direction, c.Direction)
-    return 3 if seq in (lr, rl) else 0
+    return 5 if _inverse_ready(xs) else 0
 
 
 # -----------------------------
@@ -505,25 +673,81 @@ def DENSITY_Other_INVERSE(xs: List[RowInfo]) -> int:
 # -----------------------------
 
 def WILDCARD_JACK(xs: List[RowInfo]) -> int:
-    if len(xs) < 1:
+    if len(xs) < 3 or not _has_ln_context(xs, JACKY_CONTEXT_WINDOW):
         return 0
-    return 1 if xs[0].Jacks > 0 else 0
+    rows = _head_rows(xs, min(4, len(xs)))
+    if JACKS_CHORDJACKS(rows) != 0 or JACKS_MINIJACKS(rows) != 0:
+        return 4
+    # 3 行内至少 2 行出现 jack，且存在一行双押以上。
+    jack_rows = sum(1 for r in rows[:3] if r.Jacks > 0)
+    if jack_rows >= 2 and any(r.Notes >= 2 for r in rows[:3]):
+        return 3
+    # 高速连续 jack 也可判定。
+    if jack_rows >= 2 and rows[0].MsPerBeat <= JACKY_FALLBACK_MAX_MSPB:
+        return 3
+    return 0
 
 
 def WILDCARD_SPEED(xs: List[RowInfo]) -> int:
-    if len(xs) < 2:
+    if len(xs) < 2 or not _has_ln_context(xs, 4):
         return 0
-    a, b = xs[0], xs[1]
-    if a.MsPerBeat <= 120.0 and b.MsPerBeat <= 120.0:
-        return 2
+    rows = _head_rows(xs, min(4, len(xs)))
+    if xs[0].Keys == 4:
+        if len(rows) >= 3 and STREAM_4K_ROLL(rows[:3]) != 0:
+            return 3
+        # 4K 下方向连续或极高速度都可判定为 Speedy。
+        if len(rows) >= 2:
+            same_dir = rows[0].Direction in (Direction.Left, Direction.Right) and rows[0].Direction == rows[1].Direction
+            if same_dir or rows[0].MsPerBeat <= 180.0:
+                return 3
+    else:
+        if len(rows) >= 3 and CHORDSTREAM_7K_CHORD_ROLL(rows[:3]) != 0:
+            return 3
+        # 非 4K 允许两行连续高密度同向滚动判定。
+        if len(rows) >= 2:
+            cond = rows[0].Notes >= 2 and rows[1].Notes >= 2 and rows[0].Direction == rows[1].Direction and rows[0].Direction in (Direction.Left, Direction.Right)
+            if cond or rows[0].MsPerBeat <= 170.0:
+                return 3
     return 0
 
 
 def WILDCARD_TIMING_HELL(xs: List[RowInfo]) -> int:
-    if len(xs) < 3:
+    if len(xs) < TIMINGHELL_MIN_ROWS or not _has_ln_context(xs, TIMINGHELL_CONTEXT_WINDOW):
         return 0
-    m = [xs[0].MsPerBeat, xs[1].MsPerBeat, xs[2].MsPerBeat]
-    return 3 if (max(m) - min(m)) > 35.0 else 0
+
+    # 互斥：若该窗口已符合 Inverse 或 Speedy WC，则忽略 TimingHell。
+    if _inverse_ready(xs):
+        return 0
+    if WILDCARD_SPEED(xs) != 0:
+        return 0
+
+    rows = _head_rows(xs, min(TIMINGHELL_CONTEXT_WINDOW, len(xs)))
+    if TIMINGHELL_REQUIRE_GRACE and not _is_grace_like(rows):
+        return 0
+
+    # 优先沿用 Release；若未命中，则只要短窗口内存在连续释放也可判定。
+    if len(xs) >= 5 and COORDINATION_RELEASE(xs[:5]) != 0:
+        return 5
+
+    tail_rows = [r for r in xs[:TIMINGHELL_CONTEXT_WINDOW] if len(r.LNTails) > 0]
+    if len(tail_rows) >= TIMINGHELL_MIN_TAIL_ROWS:
+        deltas = [tail_rows[i + 1].Time - tail_rows[i].Time for i in range(len(tail_rows) - 1)]
+        if any(d > 0 and d <= tail_rows[i + 1].BeatLength * TIMINGHELL_TAIL_DELTA_BEAT_RATIO for i, d in enumerate(deltas)):
+            return 5
+        if len(deltas) >= 2:
+            jitter = max(deltas) - min(deltas)
+            if jitter >= TIMINGHELL_JITTER_THRESHOLD_MS:
+                return 5
+
+    # 最宽松：如果窗口内 LN 尾+头切换频繁，也算 TimingHell 倾向。
+    switch_count = 0
+    for row in xs[:TIMINGHELL_CONTEXT_WINDOW]:
+        if len(row.LNTails) > 0 and len(row.LNHeads) > 0:
+            switch_count += 1
+    if switch_count >= 2:
+            return 5
+
+    return 0
 
 
 # -----------------------------

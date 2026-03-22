@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
+from config import IMPORTANT_CLUSTER_RATIO
 from patterns.find_patterns import find
 from patterns.clustering import Cluster, calculate_clustered_patterns
 from patterns.patterns_def import CorePattern
@@ -31,7 +32,7 @@ class PatternReport:
         importance = self.Clusters[0].Importance
         out = []
         for c in self.Clusters:
-            if c.Importance / importance > 0.5:
+            if c.Importance / importance > IMPORTANT_CLUSTER_RATIO:
                 out.append(c)
             else:
                 break
@@ -41,7 +42,7 @@ class PatternReport:
 def from_chart(chart) -> PatternReport:
     patterns = find(chart)
 
-    clusters = [c for c in calculate_clustered_patterns(patterns) if c.BPM > 25]
+    clusters = [c for c in calculate_clustered_patterns(patterns) if c.BPM > 25 or c.BPM == 0]
     clusters.sort(key=lambda x: x.Amount, reverse=True)
 
     def can_be_pruned(cluster: Cluster) -> bool:

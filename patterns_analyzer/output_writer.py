@@ -16,7 +16,7 @@ def format_specific_types(specific_types: List[tuple[str, float]]) -> str:
     return ", ".join(parts)
 
 
-def write_output_txt(path: str, rate: float, category: str, clusters: List[Cluster], duration_ms: float) -> None:
+def render_output_lines(rate: float, category: str, clusters: List[Cluster], duration_ms: float) -> List[str]:
     lines: List[str] = []
     lines.append(f"Category: {category}")
     lines.append("")
@@ -31,6 +31,12 @@ def write_output_txt(path: str, rate: float, category: str, clusters: List[Clust
             if st:
                 header += f" | {st}"
             lines.append(header)
+
+    return lines
+
+
+def write_output_txt(path: str, rate: float, category: str, clusters: List[Cluster], duration_ms: float) -> None:
+    lines = render_output_lines(rate, category, clusters, duration_ms)
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
