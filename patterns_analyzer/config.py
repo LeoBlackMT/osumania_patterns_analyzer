@@ -38,13 +38,36 @@ CORE_RATING_MULTIPLIER: dict[str, float] = {
     "Wildcard": 1.0,
 }
 
-# 子类倍率覆盖。若子类不在该表中，会回退到对应 CorePattern 的倍率。
-SUBTYPE_RATING_MULTIPLIER: dict[str, float] = {
+# RC 键型子类基准倍率（可在四个标签中独立覆盖）。
+RC_SUBTYPE_BASE: dict[str, float] = {
+    # Stream
+    "Rolls": 1.0 / 3.0,
+    "Trills": 1.0 / 3.0,
+    "Minitrills": 1.0 / 3.0,
+    # Chordstream
+    "Handstream": 0.65,
+    "Split Trill": 0.65,
+    "Jumptrill": 0.65,
+    "Jumpstream": 0.65,
+    "Brackets": 0.65,
+    "Double Stream": 0.65,
+    "Dense Chordstream": 0.65,
+    "Light Chordstream": 0.65,
+    "Chord Rolls": 0.65,
+    # Jacks
+    "Longjacks": 0.9,
+    "Quadstream": 0.9,
+    "Gluts": 0.9,
+    "Chordjacks": 0.9,
+    "Minijacks": 0.9,
+}
+
+# LN 键型子类基准倍率（可在四个标签中独立覆盖）。
+LN_SUBTYPE_BASE: dict[str, float] = {
     # Coordination
     "Column Lock": 1.5,
     "Release": 0.73,
     "Shield": 0.8,
-
     # Density
     "JS Density": 1.0,
     "HS Density": 1.0,
@@ -52,11 +75,48 @@ SUBTYPE_RATING_MULTIPLIER: dict[str, float] = {
     "LCS Density": 1.0,
     "DCS Density": 1.0,
     "Inverse": 1.5,
-
     # Wildcard
     "Jacky WC": 0.55,
     "Speedy WC": 0.8,
 }
+
+# 按标签配置子类倍率（RC/LN/HB/Mix）。
+SUBTYPE_RATING_MULTIPLIER_BY_MODE: dict[str, dict[str, float]] = {
+    "RC": {
+        **RC_SUBTYPE_BASE,
+        "Column Lock": 0.0,
+        "Release": 0.0,
+        "Shield": 0.0,
+        "JS Density": 0.0,
+        "HS Density": 0.0,
+        "DS Density": 0.0,
+        "LCS Density": 0.0,
+        "DCS Density": 0.0,
+        "Inverse": 0.0,
+        "Jacky WC": 0.0,
+        "Speedy WC": 0.0,
+    },
+    "LN": {
+        **RC_SUBTYPE_BASE,
+        **LN_SUBTYPE_BASE,
+    },
+    "HB": {
+        **RC_SUBTYPE_BASE,
+        **LN_SUBTYPE_BASE,
+    },
+    "Mix": {
+        **RC_SUBTYPE_BASE,
+        **LN_SUBTYPE_BASE,
+    },
+}
+
+# LN 标签下 RC 类的缩放系数。
+RC_CORE_LN_SCALE = 0.3
+
+# 标签识别阈值。
+LN_MODE_LOW_THRESHOLD = 0.1
+LN_MODE_HIGH_THRESHOLD = 0.9
+HB_ROW_RATIO_THRESHOLD = 0.1
 
 
 # -----------------------------

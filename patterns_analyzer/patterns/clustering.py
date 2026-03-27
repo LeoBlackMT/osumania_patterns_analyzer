@@ -115,7 +115,10 @@ def assign_clusters(patterns: List[FoundPattern]) -> List[Tuple[FoundPattern, _C
     return patterns_with_clusters
 
 
-def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterBuilder]]) -> List[Cluster]:
+def specific_clusters(
+    patterns_with_clusters: List[Tuple[FoundPattern, _ClusterBuilder]],
+    mode_tag: str = "Mix",
+) -> List[Cluster]:
     groups: Dict[Tuple[CorePattern, bool, int], List[Tuple[FoundPattern, _ClusterBuilder]]] = {}
     for p, c in patterns_with_clusters:
         key = (p.Pattern, p.Mixed, c.Value)
@@ -138,7 +141,7 @@ def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterB
             Cluster(
                 Pattern=pattern,
                 SpecificTypes=specific_types,
-                RatingMultiplier=resolve_rating_multiplier(pattern, dominant_specific),
+                RatingMultiplier=resolve_rating_multiplier(pattern, dominant_specific, mode_tag),
                 BPM=bpm,
                 Mixed=mixed,
                 Amount=_pattern_amount(starts_ends) if len(starts_ends) > 0 else 0.0,
@@ -148,6 +151,6 @@ def specific_clusters(patterns_with_clusters: List[Tuple[FoundPattern, _ClusterB
     return out
 
 
-def calculate_clustered_patterns(patterns: List[FoundPattern]) -> List[Cluster]:
+def calculate_clustered_patterns(patterns: List[FoundPattern], mode_tag: str = "Mix") -> List[Cluster]:
     pwc = assign_clusters(patterns)
-    return specific_clusters(pwc)
+    return specific_clusters(pwc, mode_tag)

@@ -27,8 +27,9 @@ from config import (
     RELEASE_MIN_TAIL_ROWS,
     RELEASE_ROLL_POINTS,
     RELEASE_SCAN_ROWS,
+    RC_CORE_LN_SCALE,
     SHIELD_MAX_BEAT_RATIO,
-    SUBTYPE_RATING_MULTIPLIER,
+    SUBTYPE_RATING_MULTIPLIER_BY_MODE,
     WILDCARD_SPECIFIC_ORDER,
 )
 from patterns.primitives import RowInfo, Direction, detect_direction
@@ -51,10 +52,22 @@ class CorePattern(Enum):
         return CORE_RATING_MULTIPLIER.get(self.value, 1.0)
 
 
-def resolve_rating_multiplier(pattern: CorePattern, specific_type: str | None) -> float:
-    if specific_type is None:
-        return pattern.RatingMultiplier
-    return SUBTYPE_RATING_MULTIPLIER.get(specific_type, pattern.RatingMultiplier)
+def resolve_rating_multiplier(pattern: CorePattern, specific_type: str | None, mode_tag: str = "Mix") -> float:
+    ln_core_patterns = {CorePattern.Coordination, CorePattern.Density, CorePattern.Wildcard}
+    rc_core_patterns = {CorePattern.Stream, CorePattern.Chordstream, CorePattern.Jacks}
+
+    default_multiplier = pattern.RatingMultiplier
+
+    if mode_tag == "RC" and pattern in ln_core_patterns:
+        return 0.0
+
+    subtype_map = SUBTYPE_RATING_MULTIPLIER_BY_MODE.get(mode_tag, SUBTYPE_RATING_MULTIPLIER_BY_MODE.get("Mix", {}))
+    value = default_multiplier if specific_type is None else subtype_map.get(specific_type, default_multiplier)
+
+    if mode_tag == "LN" and pattern in rc_core_patterns:
+        value *= RC_CORE_LN_SCALE
+
+    return value
 
 PatternRecogniser = Callable[[List[RowInfo]], int]
 
