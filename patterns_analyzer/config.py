@@ -90,15 +90,15 @@ SUBTYPE_RATING_MULTIPLIER_BY_MODE: dict[str, dict[str, float]] = {
         **RC_SUBTYPE_BASE,
         # Coordination
         "Column Lock": 1.5,
-        "Release": 0.9,
+        "Release": 1.0,
         "Shield": 0.8,
         # Density
-        "JS Density": 1.0,
-        "HS Density": 1.0,
-        "DS Density": 1.0,
-        "LCS Density": 1.0,
-        "DCS Density": 1.0,
-        "Inverse": 1.3,
+        "JS Density": 0.9,
+        "HS Density": 0.9,
+        "DS Density": 0.9,
+        "LCS Density": 0.9,
+        "DCS Density": 0.9,
+        "Inverse": 1.5,
         # Wildcard
         "Jacky WC": 0.55,
         "Speedy WC": 0.8,
@@ -110,15 +110,15 @@ SUBTYPE_RATING_MULTIPLIER_BY_MODE: dict[str, dict[str, float]] = {
         "Release": 0.3,
         "Shield": 0.8,
         # Density
-        "JS Density": 1.0,
-        "HS Density": 1.0,
-        "DS Density": 1.0,
-        "LCS Density": 1.0,
-        "DCS Density": 1.0,
+        "JS Density": 0.9,
+        "HS Density": 0.9,
+        "DS Density": 0.9,
+        "LCS Density": 0.9,
+        "DCS Density": 0.9,
         "Inverse": 0.0,
         # Wildcard
         "Jacky WC": 0.65,
-        "Speedy WC": 0.75,
+        "Speedy WC": 0.45,
     },
     "Mix": {
         **RC_SUBTYPE_BASE,
@@ -127,15 +127,15 @@ SUBTYPE_RATING_MULTIPLIER_BY_MODE: dict[str, dict[str, float]] = {
         "Release": 0.3,
         "Shield": 0.8,
         # Density
-        "JS Density": 1.0,
-        "HS Density": 1.0,
-        "DS Density": 1.0,
-        "LCS Density": 1.0,
-        "DCS Density": 1.0,
+        "JS Density": 0.9,
+        "HS Density": 0.9,
+        "DS Density": 0.9,
+        "LCS Density": 0.9,
+        "DCS Density": 0.9,
         "Inverse": 0.0,
         # Wildcard
-        "Jacky WC": 0.65,
-        "Speedy WC": 0.75,
+        "Jacky WC": 0.45,
+        "Speedy WC": 0.45,
     },
 }
 
@@ -226,7 +226,7 @@ JACKY_MIN_BPM = 90.0
 SHIELD_MAX_BEAT_RATIO = 0.25
 
 # Inverse 判定：尾到头间隔一致性容忍（毫秒）。
-INVERSE_GAP_TOLERANCE_MS = 0.0
+INVERSE_GAP_TOLERANCE_MS = 5.0
 
 # Inverse 判定：窗口内 LN Body 最少覆盖列数。
 INVERSE_MIN_FILLED_LANES = 3
