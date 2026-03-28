@@ -27,6 +27,7 @@ from config import (
     RELEASE_MIN_TAIL_ROWS,
     RELEASE_ROLL_POINTS,
     RELEASE_SCAN_ROWS,
+    RC_LN_CORE_SCALE,
     RC_CORE_LN_SCALE,
     SHIELD_MAX_BEAT_RATIO,
     SUBTYPE_RATING_MULTIPLIER_BY_MODE,
@@ -58,11 +59,13 @@ def resolve_rating_multiplier(pattern: CorePattern, specific_type: str | None, m
 
     default_multiplier = pattern.RatingMultiplier
 
-    if mode_tag == "RC" and pattern in ln_core_patterns:
-        return 0.0
-
     subtype_map = SUBTYPE_RATING_MULTIPLIER_BY_MODE.get(mode_tag, SUBTYPE_RATING_MULTIPLIER_BY_MODE.get("Mix", {}))
     value = default_multiplier if specific_type is None else subtype_map.get(specific_type, default_multiplier)
+
+    if mode_tag == "RC" and pattern in ln_core_patterns:
+        mix_map = SUBTYPE_RATING_MULTIPLIER_BY_MODE.get("Mix", {})
+        base = default_multiplier if specific_type is None else mix_map.get(specific_type, default_multiplier)
+        value = base * RC_LN_CORE_SCALE
 
     if mode_tag == "LN" and pattern in rc_core_patterns:
         value *= RC_CORE_LN_SCALE

@@ -8,7 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-from config import BPM_CLUSTER_THRESHOLD, CLUSTER_SPECIFIC_NAME_MIN_RATIO
+from config import (
+    BPM_CLUSTER_THRESHOLD,
+    CLUSTER_SPECIFIC_NAME_MIN_RATIO,
+    RELEASE_WITH_DW_MULTIPLIER,
+)
 from .find_patterns import FoundPattern
 from .patterns_def import CorePattern, resolve_rating_multiplier
 
@@ -147,6 +151,12 @@ def specific_clusters(
                 Amount=_pattern_amount(starts_ends) if len(starts_ends) > 0 else 0.0,
             )
         )
+
+    has_dw = any(c.Pattern in {CorePattern.Density, CorePattern.Wildcard} for c in out)
+    if has_dw and RELEASE_WITH_DW_MULTIPLIER != 1.0:
+        for c in out:
+            if any(name == "Release" and ratio > 0.0 for name, ratio in c.SpecificTypes):
+                c.RatingMultiplier *= RELEASE_WITH_DW_MULTIPLIER
 
     return out
 

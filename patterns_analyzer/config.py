@@ -84,34 +84,69 @@ LN_SUBTYPE_BASE: dict[str, float] = {
 SUBTYPE_RATING_MULTIPLIER_BY_MODE: dict[str, dict[str, float]] = {
     "RC": {
         **RC_SUBTYPE_BASE,
-        "Column Lock": 0.0,
-        "Release": 0.0,
-        "Shield": 0.0,
-        "JS Density": 0.0,
-        "HS Density": 0.0,
-        "DS Density": 0.0,
-        "LCS Density": 0.0,
-        "DCS Density": 0.0,
-        "Inverse": 0.0,
-        "Jacky WC": 0.0,
-        "Speedy WC": 0.0,
+        **LN_SUBTYPE_BASE,
     },
     "LN": {
         **RC_SUBTYPE_BASE,
-        **LN_SUBTYPE_BASE,
+        # Coordination
+        "Column Lock": 1.5,
+        "Release": 0.9,
+        "Shield": 0.8,
+        # Density
+        "JS Density": 1.0,
+        "HS Density": 1.0,
+        "DS Density": 1.0,
+        "LCS Density": 1.0,
+        "DCS Density": 1.0,
+        "Inverse": 1.3,
+        # Wildcard
+        "Jacky WC": 0.55,
+        "Speedy WC": 0.8,
     },
     "HB": {
         **RC_SUBTYPE_BASE,
-        **LN_SUBTYPE_BASE,
+        # Coordination
+        "Column Lock": 1.5,
+        "Release": 0.3,
+        "Shield": 0.8,
+        # Density
+        "JS Density": 1.0,
+        "HS Density": 1.0,
+        "DS Density": 1.0,
+        "LCS Density": 1.0,
+        "DCS Density": 1.0,
+        "Inverse": 0.0,
+        # Wildcard
+        "Jacky WC": 0.65,
+        "Speedy WC": 0.75,
     },
     "Mix": {
         **RC_SUBTYPE_BASE,
-        **LN_SUBTYPE_BASE,
+        # Coordination
+        "Column Lock": 1.5,
+        "Release": 0.3,
+        "Shield": 0.8,
+        # Density
+        "JS Density": 1.0,
+        "HS Density": 1.0,
+        "DS Density": 1.0,
+        "LCS Density": 1.0,
+        "DCS Density": 1.0,
+        "Inverse": 0.0,
+        # Wildcard
+        "Jacky WC": 0.65,
+        "Speedy WC": 0.75,
     },
 }
 
 # LN 标签下 RC 类的缩放系数。
 RC_CORE_LN_SCALE = 0.3
+
+# RC 标签下 LN 类（Coordination / Density / Wildcard）缩放系数。
+RC_LN_CORE_SCALE = 0.0
+
+# 当命中 Density 或 Wildcard 时，对 Release 额外施加倍率。
+RELEASE_WITH_DW_MULTIPLIER = 0.8
 
 # 标签识别阈值。
 LN_MODE_LOW_THRESHOLD = 0.1
@@ -141,6 +176,10 @@ CATEGORY_JS_HS_SECONDARY_RATIO = 0.4
 
 # SV 分类阈值（ms）。
 SV_AMOUNT_THRESHOLD = 2000.0
+SV_SPEED_EPS = 0.05
+SV_EXTREME_BPM_MIN = 30.0
+SV_EXTREME_BPM_MAX = 350.0
+SV_EXTREME_BPM_RATIO = 3.0
 
 # Cluster.Format 显示子类名称的最低占比。
 # 设为 0.0 表示只要有子类统计就显示第一名子类名；
@@ -187,7 +226,7 @@ JACKY_MIN_BPM = 90.0
 SHIELD_MAX_BEAT_RATIO = 0.25
 
 # Inverse 判定：尾到头间隔一致性容忍（毫秒）。
-INVERSE_GAP_TOLERANCE_MS = 30.0
+INVERSE_GAP_TOLERANCE_MS = 0.0
 
 # Inverse 判定：窗口内 LN Body 最少覆盖列数。
 INVERSE_MIN_FILLED_LANES = 3
